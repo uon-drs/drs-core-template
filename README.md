@@ -16,8 +16,8 @@ A monorepo template for the standard application stack:
                        ├── ci-backend.yml        — build & test .NET
                        ├── ci-frontend.yml       — build Next.js
                        ├── cd-infrastructure.yml — deploy Bicep
-                       ├── cd-backend.yml        — deploy API (dev→qa→uat→prod)
-                       ├── cd-frontend.yml       — deploy frontend (dev→qa→uat→prod)
+                       ├── cd-backend.yml        — deploy API (uat→prod)
+                       ├── cd-frontend.yml       — deploy frontend (uat→prod)
                        └── azure-pipelines.yml   — manual orchestrator
 ```
 
@@ -70,27 +70,29 @@ Azure resources:
 
 **infra/** — Bicep modules split into `components/` (create resources), `config/` (configure App Service settings), and `utils/` (shared types and helpers).
 
-**pipelines/** — Azure DevOps YAML pipelines for CI (build + test) and CD (infrastructure + app deployment) across four environments.
+**pipelines/** — Azure DevOps YAML pipelines for CI (build + test) and CD (infrastructure + app deployment) across two cloud environments: uat and prod.
 
 ### Azure Resource Naming Convention
 
 All resource names are derived from `appBaseName` and `environment` in each `.bicepparam` file:
 
-| Resource                | Pattern                                | Example (`appBaseName=myapp`, `environment=dev`) |
+| Resource                | Pattern                                | Example (`appBaseName=myapp`, `environment=uat`) |
 | ----------------------- | -------------------------------------- | ------------------------------------------------ |
-| App Service Plan        | `{appBaseName}-{environment}-asp`      | `myapp-dev-asp`                                  |
-| Frontend App Service    | `{appBaseName}-{environment}-frontend` | `myapp-dev-frontend`                             |
-| Backend App Service     | `{appBaseName}-{environment}-api`      | `myapp-dev-api`                                  |
-| Key Vault               | `{appBaseName}-{environment}-kv`       | `myapp-dev-kv`                                   |
+| App Service Plan        | `{appBaseName}-{environment}-asp`      | `myapp-uat-asp`                                  |
+| Frontend App Service    | `{appBaseName}-{environment}-frontend` | `myapp-uat-frontend`                             |
+| Backend App Service     | `{appBaseName}-{environment}-api`      | `myapp-uat-api`                                  |
+| Key Vault               | `{appBaseName}-{environment}-kv`       | `myapp-uat-kv`                                   |
 | Log Analytics Workspace | `{appBaseName}-shared-law`             | `myapp-shared-law`                               |
-| App Insights            | `{appBaseName}-{environment}-ai`       | `myapp-dev-ai`                                   |
-| PostgreSQL Server       | `{appBaseName}-{environment}-postgres` | `myapp-dev-postgres`                             |
-| Storage Account         | `{appBaseName}{environment}storage`    | `myappdevstorage`                                |
-| VNet                    | `{appBaseName}-{environment}-vnet`     | `myapp-dev-vnet`                                 |
+| App Insights            | `{appBaseName}-{environment}-ai`       | `myapp-uat-ai`                                   |
+| PostgreSQL Server       | `{appBaseName}-{environment}-postgres` | `myapp-uat-postgres`                             |
+| Storage Account         | `{appBaseName}{environment}storage`    | `myappuatstorage`                                |
+| VNet                    | `{appBaseName}-{environment}-vnet`     | `myapp-uat-vnet`                                 |
 
 ---
 
 ## Local Development
+
+Development runs entirely on local machines. Each developer runs the frontend and backend locally against a local PostgreSQL instance and a shared (or local) Keycloak instance.
 
 **Frontend**
 
@@ -150,42 +152,39 @@ Create two clients in your Keycloak realm:
 
 ### 3 — Provision Azure Infrastructure
 
-```bash
-# Create a resource group per environment
-az group create --name templateapp-dev-rg --location australiaeast
+Resource groups are provisioned by IT — request one each for uat and prod, then update the names in `pipelines/variables/*.yml`.
 
+```bash
 # Validate the Bicep template
 az deployment group validate \
-  --resource-group templateapp-dev-rg \
+  --resource-group templateapp-uat-rg \
   --template-file infra/main.bicep \
-  --parameters infra/main.dev.bicepparam \
+  --parameters infra/main.uat.bicepparam \
   --parameters postgresAdminPassword=<password>
 
 # Deploy
 az deployment group create \
-  --resource-group templateapp-dev-rg \
+  --resource-group templateapp-uat-rg \
   --template-file infra/main.bicep \
-  --parameters infra/main.dev.bicepparam \
+  --parameters infra/main.uat.bicepparam \
   --parameters postgresAdminPassword=<password>
 ```
 
-- [ ] Create resource groups for each environment (dev, qa, uat, prod)
-- [ ] Run validate + deploy for dev first; repeat for other environments
+- [ ] Confirm resource groups exist for uat and prod
+- [ ] Run validate + deploy for uat first, then prod
 - [ ] Store secrets in Key Vault: `nextauth-secret`, `keycloak-frontend-client-secret`, `postgres-connection-string`
 - [ ] Verify App Service Managed Identities have the `Key Vault Secrets User` role on the vault
 
 ### 4 — Set up Azure DevOps
 
 - [ ] Create service connection `templateapp-azure-sc` (Azure Resource Manager, scoped to subscription)
-- [ ] Create four ADO Environments:
-  - [ ] `templateapp-dev` (no approvals)
-  - [ ] `templateapp-qa` (no approvals)
+- [ ] Create two ADO Environments:
   - [ ] `templateapp-uat` (1 approver required)
   - [ ] `templateapp-prod` (2 approvers required)
 - [ ] Create variable groups in the ADO Library:
   - [ ] `templateapp-common` — non-secret shared variables
-  - [ ] `templateapp-dev-secrets` — `postgresAdminPassword` (secret), `keycloakClientSecret` (secret), `nextauthSecret` (secret)
-  - [ ] Repeat for `qa`, `uat`, `prod`
+  - [ ] `templateapp-uat-secrets` — `postgresAdminPassword` (secret), `keycloakClientSecret` (secret), `nextauthSecret` (secret)
+  - [ ] `templateapp-prod-secrets` — same structure
 - [ ] Import pipeline YAML files into ADO:
   - [ ] `pipelines/ci-backend.yml` → name: "CI - Backend"
   - [ ] `pipelines/ci-frontend.yml` → name: "CI - Frontend"
@@ -194,24 +193,24 @@ az deployment group create \
   - [ ] `pipelines/cd-frontend.yml` → name: "CD - Frontend"
   - [ ] `pipelines/azure-pipelines.yml` → name: "CD - Orchestrator"
 - [ ] Link `templateapp-common` variable group to each pipeline
-- [ ] Link `templateapp-{env}-secrets` variable groups to `cd-infrastructure`, `cd-backend`, `cd-frontend`
+- [ ] Link `templateapp-uat-secrets` and `templateapp-prod-secrets` to `cd-infrastructure`, `cd-backend`, `cd-frontend`
 
 ### 5 — First Deployment
 
 - [ ] Trigger `CI - Backend` on a feature branch to verify build and tests pass
 - [ ] Trigger `CI - Frontend` on a feature branch to verify Next.js build passes
-- [ ] Run `CD - Infrastructure` targeting `dev` to provision all Azure resources
-- [ ] Run EF Core migrations against the dev PostgreSQL instance:
+- [ ] Run `CD - Infrastructure` targeting `uat` to provision all Azure resources
+- [ ] Run EF Core migrations against the uat PostgreSQL instance:
   ```bash
   dotnet ef database update --project backend/src/TemplateApp.Api
   ```
-- [ ] Merge to `main` to trigger `CD - Backend` and `CD - Frontend` for dev deployment
+- [ ] Merge to `main` to trigger `CD - Backend` and `CD - Frontend` for uat deployment
 - [ ] Verify end-to-end: frontend → Keycloak login → JWT forwarded to backend → 200 OK
 
 ### 6 — Smoke Testing
 
-- [ ] `GET https://{backend-dev-url}/api/health` → 200 (unauthenticated)
-- [ ] `GET https://{backend-dev-url}/api/health/auth` with valid JWT → 200
+- [ ] `GET https://{backend-uat-url}/api/health` → 200 (unauthenticated)
+- [ ] `GET https://{backend-uat-url}/api/health/auth` with valid JWT → 200
 - [ ] Frontend sign-in flow completes without errors
 - [ ] Application Insights receives telemetry from both frontend and backend
 
@@ -235,7 +234,7 @@ The PostgreSQL admin password is a `@secure()` Bicep parameter supplied only at 
 
 Required for deployment to Azure App Service on Linux. The deployment pipeline copies the `public/` and `.next/static/` directories into the standalone output before packaging, as Next.js does not do this automatically.
 
-### Progressive deployment (dev → qa → uat → prod)
+### Progressive deployment (uat → prod)
 
 The CD pipelines use Azure DevOps `deployment` jobs linked to ADO Environments. Approval gates are configured in the ADO UI — not in YAML — keeping pipeline code clean and approval policy in one place.
 
