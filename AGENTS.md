@@ -82,3 +82,9 @@ Inline comments for non-obvious logic only — do not comment self-evident code.
 - **Framework:** Vitest + React Testing Library (set up if not already present)
 - **Location:** colocate tests alongside source files as `ComponentName.test.tsx`, or group in a `__tests__/` folder in the same directory
 - **Naming:** `describe` block per component or function; `it('does x when y')`
+
+---
+
+## Commits
+
+After making code changes, create commits that group changes in functionally meaningful ways. Each commit should represent one coherent unit of work (e.g. a new feature, a bug fix, a refactor) — not one commit per file, and not all changes lumped into one commit.
