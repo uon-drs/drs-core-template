@@ -1,5 +1,4 @@
 services:
-
   # ──────────────────────────────────────────
   # App database
   # Connection string: Host=localhost;Port=5432;Database=templateapp;Username=templateapp;Password=dev_password
@@ -47,7 +46,7 @@ services:
   # Issuer URL (for .env.local): http://localhost:8080/realms/<your-realm>
   # ──────────────────────────────────────────
   keycloak:
-    image: keycloak/keycloak:26
+    image: keycloak/keycloak:26.6
     command: start-dev
     environment:
       KC_DB: postgres
