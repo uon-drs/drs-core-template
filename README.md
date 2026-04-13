@@ -36,6 +36,12 @@ A monorepo template for the standard application stack:
 
 ---
 
+## Using AI Assistants
+
+If you use Claude or an OpenAI Codex-compatible agent, ask it to run the **Project Setup** from `CLAUDE.md` / `AGENTS.md` before doing any other work. It will collect your project details and perform all the renaming and file restructuring in one go.
+
+---
+
 ## Architecture
 
 ```
