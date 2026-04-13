@@ -152,19 +152,19 @@ Create two clients in your Keycloak realm:
 
 ### 3 — Provision Azure Infrastructure
 
-Resource groups are provisioned by IT — request one each for uat and prod, then update the names in `pipelines/variables/*.yml`.
+Resource groups are provisioned by IT. Update the names in `pipelines/variables/*.yml`.
 
 ```bash
 # Validate the Bicep template
 az deployment group validate \
-  --resource-group templateapp-uat-rg \
+  --resource-group templateapp-rg \
   --template-file infra/main.bicep \
   --parameters infra/main.uat.bicepparam \
   --parameters postgresAdminPassword=<password>
 
 # Deploy
 az deployment group create \
-  --resource-group templateapp-uat-rg \
+  --resource-group templateapp-rg \
   --template-file infra/main.bicep \
   --parameters infra/main.uat.bicepparam \
   --parameters postgresAdminPassword=<password>
