@@ -1,0 +1,83 @@
+# CI — Frontend (Next.js)
+#
+# Triggers on PRs and pushes to main that touch the frontend directory.
+# Installs dependencies, builds Next.js (standalone output), and publishes a deployment artifact.
+#
+# Artifact produced: 'frontend-drop' — used by cd-frontend.yml
+#
+# NOTE: next.config.ts must have output: 'standalone' for this pipeline to work correctly.
+# The artifact includes the standalone server, static files, and public assets.
+
+trigger:
+  branches:
+    include:
+      - main
+      - feature/*
+      - bugfix/*
+  paths:
+    include:
+      - frontend/**
+
+pr:
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - frontend/**
+
+variables:
+  - template: variables/common.yml
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+stages:
+  - stage: Build
+    displayName: 'Build Next.js Frontend'
+    jobs:
+      - job: BuildFrontend
+        displayName: 'Install, Build, Package'
+        steps:
+          - task: NodeTool@0
+            displayName: 'Install Node.js $(nodeVersion)'
+            inputs:
+              versionSpec: $(nodeVersion)
+
+          - task: Cache@2
+            displayName: 'Cache node_modules'
+            inputs:
+              key: 'npm | "$(Agent.OS)" | $(frontendPath)/package-lock.json'
+              restoreKeys: 'npm | "$(Agent.OS)"'
+              path: '$(frontendPath)/node_modules'
+
+          - script: npm ci
+            workingDirectory: $(frontendPath)
+            displayName: 'Install dependencies (npm ci)'
+
+          - script: npm run build
+            workingDirectory: $(frontendPath)
+            displayName: 'Build Next.js (standalone output)'
+            env:
+              # These placeholder values satisfy any build-time env var requirements.
+              # Actual values are injected at runtime via App Service app settings.
+              NEXTAUTH_URL: 'http://placeholder'
+              NEXTAUTH_SECRET: 'placeholder-build-secret-32-chars!!'
+              KEYCLOAK_CLIENT_ID: 'placeholder'
+              KEYCLOAK_CLIENT_SECRET: 'placeholder'
+              KEYCLOAK_ISSUER: 'https://placeholder.example.com/realms/placeholder'
+              NEXT_PUBLIC_API_BASE_URL: 'https://placeholder'
+
+          # Next.js standalone output does not include public/ or .next/static/ automatically.
+          # These must be copied into the standalone directory before packaging.
+          - script: |
+              cp -r public $(frontendPath)/.next/standalone/
+              cp -r $(frontendPath)/.next/static $(frontendPath)/.next/standalone/.next/static
+            displayName: 'Copy public/ and static/ into standalone output'
+
+          - task: PublishPipelineArtifact@1
+            displayName: 'Publish artifact: frontend-drop'
+            inputs:
+              targetPath: '$(frontendPath)/.next/standalone'
+              artifactName: 'frontend-drop'
+              publishLocation: 'pipeline'

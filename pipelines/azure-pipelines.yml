@@ -1,0 +1,177 @@
+# CD — Orchestrator
+#
+# A manual "run everything" pipeline. Use this when you want to deploy all three components
+# (infrastructure, backend, frontend) to a single environment in one go.
+#
+# For day-to-day deployments, use the individual CD pipelines instead:
+#   cd-infrastructure.yml — infrastructure changes
+#   cd-backend.yml        — API deployments
+#   cd-frontend.yml       — frontend deployments
+#
+# Approval gates are honoured per-environment via ADO Environments (configured in the ADO UI).
+
+trigger: none
+
+parameters:
+  - name: targetEnvironment
+    displayName: 'Target Environment'
+    type: string
+    default: 'dev'
+    values:
+      - dev
+      - qa
+      - uat
+      - prod
+
+  - name: deployInfra
+    displayName: 'Deploy Infrastructure (Bicep)?'
+    type: boolean
+    default: false
+
+  - name: deployBackend
+    displayName: 'Deploy Backend API?'
+    type: boolean
+    default: true
+
+  - name: deployFrontend
+    displayName: 'Deploy Frontend?'
+    type: boolean
+    default: true
+
+variables:
+  - template: variables/common.yml
+  - ${{ if eq(parameters.targetEnvironment, 'dev') }}:
+      - template: variables/dev.yml
+      - group: templateapp-dev-secrets
+  - ${{ if eq(parameters.targetEnvironment, 'qa') }}:
+      - template: variables/qa.yml
+      - group: templateapp-qa-secrets
+  - ${{ if eq(parameters.targetEnvironment, 'uat') }}:
+      - template: variables/uat.yml
+      - group: templateapp-uat-secrets
+  - ${{ if eq(parameters.targetEnvironment, 'prod') }}:
+      - template: variables/prod.yml
+      - group: templateapp-prod-secrets
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+stages:
+  # ============================================================
+  - stage: Infrastructure
+    displayName: 'Deploy Infrastructure (${{ parameters.targetEnvironment }})'
+    condition: eq('${{ parameters.deployInfra }}', true)
+    jobs:
+      - deployment: DeployBicep
+        displayName: 'Deploy Bicep'
+        environment: '$(appBaseName)-$(environment)'
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - checkout: self
+
+                - task: AzureCLI@2
+                  displayName: 'Validate Bicep'
+                  inputs:
+                    azureSubscription: $(azureServiceConnection)
+                    scriptType: bash
+                    scriptLocation: inlineScript
+                    inlineScript: |
+                      az bicep build --file $(infraPath)/main.bicep
+                      az deployment group validate \
+                        --resource-group $(resourceGroupName) \
+                        --template-file $(infraPath)/main.bicep \
+                        --parameters $(infraPath)/main.$(environment).bicepparam \
+                        --parameters postgresAdminPassword='$(postgresAdminPassword)'
+
+                - task: AzureCLI@2
+                  displayName: 'Deploy Bicep'
+                  inputs:
+                    azureSubscription: $(azureServiceConnection)
+                    scriptType: bash
+                    scriptLocation: inlineScript
+                    inlineScript: |
+                      az deployment group create \
+                        --resource-group $(resourceGroupName) \
+                        --template-file $(infraPath)/main.bicep \
+                        --parameters $(infraPath)/main.$(environment).bicepparam \
+                        --parameters postgresAdminPassword='$(postgresAdminPassword)' \
+                        --name "orchestrator-infra-$(environment)-$(Build.BuildNumber)"
+
+  # ============================================================
+  - stage: Backend
+    displayName: 'Deploy Backend (${{ parameters.targetEnvironment }})'
+    dependsOn: Infrastructure
+    condition: >
+      and(
+        in(dependencies.Infrastructure.result, 'Succeeded', 'Skipped'),
+        eq('${{ parameters.deployBackend }}', true)
+      )
+    jobs:
+      - deployment: DeployApi
+        displayName: 'Deploy API'
+        environment: '$(appBaseName)-$(environment)'
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: DownloadPipelineArtifact@2
+                  displayName: 'Download api-drop'
+                  inputs:
+                    buildType: specific
+                    project: $(System.TeamProject)
+                    definition: 'CI - Backend'
+                    buildVersionToDownload: latestFromBranch
+                    branchName: 'refs/heads/main'
+                    artifactName: 'api-drop'
+                    targetPath: '$(Pipeline.Workspace)/api-drop'
+
+                - task: AzureWebApp@1
+                  displayName: 'Deploy API to App Service'
+                  inputs:
+                    azureSubscription: $(azureServiceConnection)
+                    appType: 'webAppLinux'
+                    appName: '$(appBaseName)-$(environment)-api'
+                    resourceGroupName: $(resourceGroupName)
+                    package: '$(Pipeline.Workspace)/api-drop/**/*.zip'
+                    runtimeStack: 'DOTNETCORE|10.0'
+
+  # ============================================================
+  - stage: Frontend
+    displayName: 'Deploy Frontend (${{ parameters.targetEnvironment }})'
+    dependsOn: Infrastructure
+    condition: >
+      and(
+        in(dependencies.Infrastructure.result, 'Succeeded', 'Skipped'),
+        eq('${{ parameters.deployFrontend }}', true)
+      )
+    jobs:
+      - deployment: DeployFrontend
+        displayName: 'Deploy frontend'
+        environment: '$(appBaseName)-$(environment)'
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: DownloadPipelineArtifact@2
+                  displayName: 'Download frontend-drop'
+                  inputs:
+                    buildType: specific
+                    project: $(System.TeamProject)
+                    definition: 'CI - Frontend'
+                    buildVersionToDownload: latestFromBranch
+                    branchName: 'refs/heads/main'
+                    artifactName: 'frontend-drop'
+                    targetPath: '$(Pipeline.Workspace)/frontend-drop'
+
+                - task: AzureWebApp@1
+                  displayName: 'Deploy frontend to App Service'
+                  inputs:
+                    azureSubscription: $(azureServiceConnection)
+                    appType: 'webAppLinux'
+                    appName: '$(appBaseName)-$(environment)-frontend'
+                    resourceGroupName: $(resourceGroupName)
+                    package: '$(Pipeline.Workspace)/frontend-drop'
+                    runtimeStack: 'NODE|20-lts'
+                    startUpCommand: 'node server.js'

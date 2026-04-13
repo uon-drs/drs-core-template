@@ -1,0 +1,120 @@
+# CD — Infrastructure (Bicep)
+#
+# Deploys Azure infrastructure using Bicep for a chosen environment.
+# Run this pipeline manually (trigger: none) whenever infrastructure changes are needed.
+#
+# Stages:
+#   1. Validate   — bicep build + az deployment validate
+#   2. WhatIf     — az deployment what-if (shows planned changes without applying)
+#   3. Deploy     — az deployment group create
+#
+# Secret variables required (from ADO Variable Group 'templateapp-{env}-secrets'):
+#   postgresAdminPassword
+
+trigger: none
+
+parameters:
+  - name: targetEnvironment
+    displayName: 'Target Environment'
+    type: string
+    default: 'dev'
+    values:
+      - dev
+      - qa
+      - uat
+      - prod
+
+variables:
+  - template: variables/common.yml
+  - ${{ if eq(parameters.targetEnvironment, 'dev') }}:
+      - template: variables/dev.yml
+      - group: templateapp-dev-secrets
+  - ${{ if eq(parameters.targetEnvironment, 'qa') }}:
+      - template: variables/qa.yml
+      - group: templateapp-qa-secrets
+  - ${{ if eq(parameters.targetEnvironment, 'uat') }}:
+      - template: variables/uat.yml
+      - group: templateapp-uat-secrets
+  - ${{ if eq(parameters.targetEnvironment, 'prod') }}:
+      - template: variables/prod.yml
+      - group: templateapp-prod-secrets
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+stages:
+  # ============================================================
+  - stage: Validate
+    displayName: 'Validate Bicep (${{ parameters.targetEnvironment }})'
+    jobs:
+      - job: Validate
+        displayName: 'Lint and validate template'
+        steps:
+          - task: AzureCLI@2
+            displayName: 'Bicep lint + ARM validate'
+            inputs:
+              azureSubscription: $(azureServiceConnection)
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                set -e
+                echo "=== Bicep build (lint) ==="
+                az bicep build --file $(infraPath)/main.bicep
+
+                echo "=== ARM validate ==="
+                az deployment group validate \
+                  --resource-group $(resourceGroupName) \
+                  --template-file $(infraPath)/main.bicep \
+                  --parameters $(infraPath)/main.$(environment).bicepparam \
+                  --parameters postgresAdminPassword='$(postgresAdminPassword)'
+
+  # ============================================================
+  - stage: WhatIf
+    displayName: 'What-If Analysis (${{ parameters.targetEnvironment }})'
+    dependsOn: Validate
+    jobs:
+      - job: WhatIf
+        displayName: 'Show planned changes'
+        steps:
+          - task: AzureCLI@2
+            displayName: 'az deployment what-if'
+            inputs:
+              azureSubscription: $(azureServiceConnection)
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                az deployment group what-if \
+                  --resource-group $(resourceGroupName) \
+                  --template-file $(infraPath)/main.bicep \
+                  --parameters $(infraPath)/main.$(environment).bicepparam \
+                  --parameters postgresAdminPassword='$(postgresAdminPassword)'
+
+  # ============================================================
+  - stage: Deploy
+    displayName: 'Deploy Infrastructure (${{ parameters.targetEnvironment }})'
+    dependsOn: WhatIf
+    jobs:
+      # Using 'deployment' job type to integrate with ADO Environments.
+      # Configure approval gates on 'templateapp-uat' and 'templateapp-prod' in the ADO UI.
+      - deployment: DeployBicep
+        displayName: 'Deploy Bicep to $(environment)'
+        environment: '$(appBaseName)-$(environment)'
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - checkout: self
+
+                - task: AzureCLI@2
+                  displayName: 'az deployment group create'
+                  inputs:
+                    azureSubscription: $(azureServiceConnection)
+                    scriptType: bash
+                    scriptLocation: inlineScript
+                    inlineScript: |
+                      az deployment group create \
+                        --resource-group $(resourceGroupName) \
+                        --template-file $(infraPath)/main.bicep \
+                        --parameters $(infraPath)/main.$(environment).bicepparam \
+                        --parameters postgresAdminPassword='$(postgresAdminPassword)' \
+                        --name "infra-$(environment)-$(Build.BuildNumber)"

@@ -1,0 +1,27 @@
+variables:
+  # ============================================================
+  # Application identity — update after running find-and-replace
+  # ============================================================
+  appBaseName: 'templateapp'
+
+  # ============================================================
+  # Azure DevOps service connection
+  # Create this in ADO Project Settings > Service Connections
+  # ============================================================
+  azureServiceConnection: 'templateapp-azure-sc'
+
+  # ============================================================
+  # Build configuration
+  # ============================================================
+  buildConfiguration: 'Release'
+  dotnetVersion: '10.x'
+  nodeVersion: '20.x'
+
+  # ============================================================
+  # Source paths (relative to repo root)
+  # ============================================================
+  backendProjectPath: 'backend/src/TemplateApp.Api/TemplateApp.Api.csproj'
+  backendTestPath: 'backend/tests/TemplateApp.Api.Tests/TemplateApp.Api.Tests.csproj'
+  backendSolutionPath: 'backend/TemplateApp.sln'
+  frontendPath: 'frontend'
+  infraPath: 'infra'

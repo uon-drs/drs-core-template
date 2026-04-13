@@ -1,0 +1,92 @@
+# CI — Backend (.NET API)
+#
+# Triggers on PRs and pushes to main that touch the backend directory.
+# Builds, tests (with coverage), and publishes a deployment artifact.
+#
+# Artifact produced: 'api-drop' — used by cd-backend.yml
+
+trigger:
+  branches:
+    include:
+      - main
+      - feature/*
+      - bugfix/*
+  paths:
+    include:
+      - backend/**
+
+pr:
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - backend/**
+
+variables:
+  - template: variables/common.yml
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+stages:
+  - stage: Build
+    displayName: 'Build & Test .NET API'
+    jobs:
+      - job: BuildAndTest
+        displayName: 'Build, Test, Publish'
+        steps:
+          - task: UseDotNet@2
+            displayName: 'Install .NET $(dotnetVersion)'
+            inputs:
+              version: $(dotnetVersion)
+              performMultiLevelLookup: true
+
+          - task: DotNetCoreCLI@2
+            displayName: 'Restore NuGet packages'
+            inputs:
+              command: restore
+              projects: $(backendSolutionPath)
+
+          - task: DotNetCoreCLI@2
+            displayName: 'Build solution'
+            inputs:
+              command: build
+              projects: $(backendSolutionPath)
+              arguments: '--configuration $(buildConfiguration) --no-restore'
+
+          - task: DotNetCoreCLI@2
+            displayName: 'Run tests with coverage'
+            inputs:
+              command: test
+              projects: $(backendTestPath)
+              arguments: >
+                --configuration $(buildConfiguration)
+                --no-build
+                --collect:"XPlat Code Coverage"
+                --results-directory $(Agent.TempDirectory)/coverage
+
+          - task: PublishCodeCoverageResults@2
+            displayName: 'Publish code coverage'
+            inputs:
+              summaryFileLocation: '$(Agent.TempDirectory)/coverage/**/coverage.cobertura.xml'
+              pathToSources: '$(Build.SourcesDirectory)/backend'
+
+          - task: DotNetCoreCLI@2
+            displayName: 'Publish application'
+            inputs:
+              command: publish
+              projects: $(backendProjectPath)
+              arguments: >
+                --configuration $(buildConfiguration)
+                --no-build
+                --output $(Build.ArtifactStagingDirectory)/api
+              publishWebProjects: false
+              zipAfterPublish: true
+
+          - task: PublishPipelineArtifact@1
+            displayName: 'Publish artifact: api-drop'
+            inputs:
+              targetPath: '$(Build.ArtifactStagingDirectory)/api'
+              artifactName: 'api-drop'
+              publishLocation: 'pipeline'

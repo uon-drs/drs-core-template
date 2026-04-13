@@ -1,0 +1,202 @@
+# CD — Frontend (Next.js)
+#
+# Progressively deploys the Next.js frontend artifact across environments: dev → qa → uat → prod.
+# Each stage uses an Azure DevOps 'deployment' job linked to an ADO Environment.
+# Configure approval gates on 'templateapp-uat' and 'templateapp-prod' in the ADO UI.
+#
+# The artifact contains the Next.js standalone server (server.js).
+# The App Service startup command is set to 'node server.js' by Bicep (config/webapp.bicep).
+#
+# This pipeline is triggered automatically when 'CI - Frontend' completes on the main branch.
+
+trigger: none
+
+parameters:
+  - name: startEnvironment
+    displayName: 'Start from environment (skips earlier stages)'
+    type: string
+    default: 'dev'
+    values:
+      - dev
+      - qa
+      - uat
+      - prod
+
+variables:
+  - template: variables/common.yml
+
+resources:
+  pipelines:
+    - pipeline: ci-frontend
+      source: 'CI - Frontend'
+      trigger:
+        branches:
+          include:
+            - main
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+stages:
+  # ============================================================
+  - stage: Deploy_Dev
+    displayName: 'Deploy to Dev'
+    condition: >
+      and(
+        succeeded(),
+        in('${{ parameters.startEnvironment }}', 'dev')
+      )
+    variables:
+      - template: variables/dev.yml
+    jobs:
+      - deployment: DeployFrontend
+        displayName: 'Deploy frontend to dev'
+        environment: '$(appBaseName)-dev'
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: DownloadPipelineArtifact@2
+                  displayName: 'Download frontend-drop artifact'
+                  inputs:
+                    buildType: specific
+                    project: $(System.TeamProject)
+                    definition: 'CI - Frontend'
+                    buildVersionToDownload: latestFromBranch
+                    branchName: 'refs/heads/main'
+                    artifactName: 'frontend-drop'
+                    targetPath: '$(Pipeline.Workspace)/frontend-drop'
+
+                - task: AzureWebApp@1
+                  displayName: 'Deploy to App Service (dev)'
+                  inputs:
+                    azureSubscription: $(azureServiceConnection)
+                    appType: 'webAppLinux'
+                    appName: '$(appBaseName)-$(environment)-frontend'
+                    resourceGroupName: $(resourceGroupName)
+                    package: '$(Pipeline.Workspace)/frontend-drop'
+                    runtimeStack: 'NODE|20-lts'
+                    startUpCommand: 'node server.js'
+
+  # ============================================================
+  - stage: Deploy_QA
+    displayName: 'Deploy to QA'
+    dependsOn: Deploy_Dev
+    condition: >
+      and(
+        in(dependencies.Deploy_Dev.result, 'Succeeded', 'Skipped'),
+        in('${{ parameters.startEnvironment }}', 'dev', 'qa')
+      )
+    variables:
+      - template: variables/qa.yml
+    jobs:
+      - deployment: DeployFrontend
+        displayName: 'Deploy frontend to qa'
+        environment: '$(appBaseName)-qa'
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: DownloadPipelineArtifact@2
+                  displayName: 'Download frontend-drop artifact'
+                  inputs:
+                    buildType: specific
+                    project: $(System.TeamProject)
+                    definition: 'CI - Frontend'
+                    buildVersionToDownload: latestFromBranch
+                    branchName: 'refs/heads/main'
+                    artifactName: 'frontend-drop'
+                    targetPath: '$(Pipeline.Workspace)/frontend-drop'
+
+                - task: AzureWebApp@1
+                  displayName: 'Deploy to App Service (qa)'
+                  inputs:
+                    azureSubscription: $(azureServiceConnection)
+                    appType: 'webAppLinux'
+                    appName: '$(appBaseName)-$(environment)-frontend'
+                    resourceGroupName: $(resourceGroupName)
+                    package: '$(Pipeline.Workspace)/frontend-drop'
+                    runtimeStack: 'NODE|20-lts'
+                    startUpCommand: 'node server.js'
+
+  # ============================================================
+  - stage: Deploy_UAT
+    displayName: 'Deploy to UAT'
+    dependsOn: Deploy_QA
+    condition: >
+      and(
+        in(dependencies.Deploy_QA.result, 'Succeeded', 'Skipped'),
+        in('${{ parameters.startEnvironment }}', 'dev', 'qa', 'uat')
+      )
+    variables:
+      - template: variables/uat.yml
+    jobs:
+      - deployment: DeployFrontend
+        displayName: 'Deploy frontend to uat'
+        environment: '$(appBaseName)-uat'
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: DownloadPipelineArtifact@2
+                  displayName: 'Download frontend-drop artifact'
+                  inputs:
+                    buildType: specific
+                    project: $(System.TeamProject)
+                    definition: 'CI - Frontend'
+                    buildVersionToDownload: latestFromBranch
+                    branchName: 'refs/heads/main'
+                    artifactName: 'frontend-drop'
+                    targetPath: '$(Pipeline.Workspace)/frontend-drop'
+
+                - task: AzureWebApp@1
+                  displayName: 'Deploy to App Service (uat)'
+                  inputs:
+                    azureSubscription: $(azureServiceConnection)
+                    appType: 'webAppLinux'
+                    appName: '$(appBaseName)-$(environment)-frontend'
+                    resourceGroupName: $(resourceGroupName)
+                    package: '$(Pipeline.Workspace)/frontend-drop'
+                    runtimeStack: 'NODE|20-lts'
+                    startUpCommand: 'node server.js'
+
+  # ============================================================
+  - stage: Deploy_Prod
+    displayName: 'Deploy to Production'
+    dependsOn: Deploy_UAT
+    condition: >
+      and(
+        in(dependencies.Deploy_UAT.result, 'Succeeded', 'Skipped'),
+        in('${{ parameters.startEnvironment }}', 'dev', 'qa', 'uat', 'prod')
+      )
+    variables:
+      - template: variables/prod.yml
+    jobs:
+      - deployment: DeployFrontend
+        displayName: 'Deploy frontend to prod'
+        environment: '$(appBaseName)-prod'
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: DownloadPipelineArtifact@2
+                  displayName: 'Download frontend-drop artifact'
+                  inputs:
+                    buildType: specific
+                    project: $(System.TeamProject)
+                    definition: 'CI - Frontend'
+                    buildVersionToDownload: latestFromBranch
+                    branchName: 'refs/heads/main'
+                    artifactName: 'frontend-drop'
+                    targetPath: '$(Pipeline.Workspace)/frontend-drop'
+
+                - task: AzureWebApp@1
+                  displayName: 'Deploy to App Service (prod)'
+                  inputs:
+                    azureSubscription: $(azureServiceConnection)
+                    appType: 'webAppLinux'
+                    appName: '$(appBaseName)-$(environment)-frontend'
+                    resourceGroupName: $(resourceGroupName)
+                    package: '$(Pipeline.Workspace)/frontend-drop'
+                    runtimeStack: 'NODE|20-lts'
+                    startUpCommand: 'node server.js'

@@ -1,0 +1,11 @@
+variables:
+  environment: 'uat'
+  resourceGroupName: 'templateapp-uat-rg'
+  azureLocation: 'australiaeast'
+
+  aspSkuName: 'B2'
+  postgresAdminLogin: 'templateappadmin'
+  keycloakAuthority: 'https://keycloak.example.com/realms/templateapp'
+  keycloakApiAudience: 'templateapp-api'
+  keycloakFrontendClientId: 'templateapp-frontend'
+  keycloakIssuerUrl: 'https://keycloak.example.com/realms/templateapp'
