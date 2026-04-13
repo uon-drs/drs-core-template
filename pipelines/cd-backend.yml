@@ -1,11 +1,11 @@
 # CD — Backend (.NET API)
 #
-# Progressively deploys the backend API artifact across environments: dev → qa → uat → prod.
+# Progressively deploys the backend API artifact across environments: uat → prod.
 # Each stage uses an Azure DevOps 'deployment' job linked to an ADO Environment.
 # Configure approval gates on 'templateapp-uat' and 'templateapp-prod' in the ADO UI.
 #
 # This pipeline is triggered automatically when 'CI - Backend' completes on the main branch.
-# It can also be run manually with a 'startEnvironment' parameter to deploy directly to QA/UAT/prod.
+# It can also be run manually with a 'startEnvironment' parameter to deploy directly to prod.
 
 trigger: none
 
@@ -13,10 +13,8 @@ parameters:
   - name: startEnvironment
     displayName: 'Start from environment (skips earlier stages)'
     type: string
-    default: 'dev'
+    default: 'uat'
     values:
-      - dev
-      - qa
       - uat
       - prod
 
@@ -38,92 +36,12 @@ pool:
 
 stages:
   # ============================================================
-  - stage: Deploy_Dev
-    displayName: 'Deploy to Dev'
+  - stage: Deploy_UAT
+    displayName: 'Deploy to UAT'
     condition: >
       and(
         succeeded(),
-        in('${{ parameters.startEnvironment }}', 'dev')
-      )
-    variables:
-      - template: variables/dev.yml
-    jobs:
-      - deployment: DeployApi
-        displayName: 'Deploy API to dev'
-        environment: '$(appBaseName)-dev'
-        strategy:
-          runOnce:
-            deploy:
-              steps:
-                - task: DownloadPipelineArtifact@2
-                  displayName: 'Download api-drop artifact'
-                  inputs:
-                    buildType: specific
-                    project: $(System.TeamProject)
-                    definition: 'CI - Backend'
-                    buildVersionToDownload: latestFromBranch
-                    branchName: 'refs/heads/main'
-                    artifactName: 'api-drop'
-                    targetPath: '$(Pipeline.Workspace)/api-drop'
-
-                - task: AzureWebApp@1
-                  displayName: 'Deploy to App Service (dev)'
-                  inputs:
-                    azureSubscription: $(azureServiceConnection)
-                    appType: 'webAppLinux'
-                    appName: '$(appBaseName)-$(environment)-api'
-                    resourceGroupName: $(resourceGroupName)
-                    package: '$(Pipeline.Workspace)/api-drop/**/*.zip'
-                    runtimeStack: 'DOTNETCORE|10.0'
-
-  # ============================================================
-  - stage: Deploy_QA
-    displayName: 'Deploy to QA'
-    dependsOn: Deploy_Dev
-    condition: >
-      and(
-        in(dependencies.Deploy_Dev.result, 'Succeeded', 'Skipped'),
-        in('${{ parameters.startEnvironment }}', 'dev', 'qa')
-      )
-    variables:
-      - template: variables/qa.yml
-    jobs:
-      - deployment: DeployApi
-        displayName: 'Deploy API to qa'
-        environment: '$(appBaseName)-qa'
-        strategy:
-          runOnce:
-            deploy:
-              steps:
-                - task: DownloadPipelineArtifact@2
-                  displayName: 'Download api-drop artifact'
-                  inputs:
-                    buildType: specific
-                    project: $(System.TeamProject)
-                    definition: 'CI - Backend'
-                    buildVersionToDownload: latestFromBranch
-                    branchName: 'refs/heads/main'
-                    artifactName: 'api-drop'
-                    targetPath: '$(Pipeline.Workspace)/api-drop'
-
-                - task: AzureWebApp@1
-                  displayName: 'Deploy to App Service (qa)'
-                  inputs:
-                    azureSubscription: $(azureServiceConnection)
-                    appType: 'webAppLinux'
-                    appName: '$(appBaseName)-$(environment)-api'
-                    resourceGroupName: $(resourceGroupName)
-                    package: '$(Pipeline.Workspace)/api-drop/**/*.zip'
-                    runtimeStack: 'DOTNETCORE|10.0'
-
-  # ============================================================
-  - stage: Deploy_UAT
-    displayName: 'Deploy to UAT'
-    dependsOn: Deploy_QA
-    condition: >
-      and(
-        in(dependencies.Deploy_QA.result, 'Succeeded', 'Skipped'),
-        in('${{ parameters.startEnvironment }}', 'dev', 'qa', 'uat')
+        in('${{ parameters.startEnvironment }}', 'uat')
       )
     variables:
       - template: variables/uat.yml
@@ -164,7 +82,7 @@ stages:
     condition: >
       and(
         in(dependencies.Deploy_UAT.result, 'Succeeded', 'Skipped'),
-        in('${{ parameters.startEnvironment }}', 'dev', 'qa', 'uat', 'prod')
+        in('${{ parameters.startEnvironment }}', 'uat', 'prod')
       )
     variables:
       - template: variables/prod.yml
