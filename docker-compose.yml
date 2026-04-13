@@ -47,7 +47,7 @@ services:
   # Issuer URL (for .env.local): http://localhost:8080/realms/<your-realm>
   # ──────────────────────────────────────────
   keycloak:
-    image: quay.io/keycloak/keycloak:26
+    image: keycloak/keycloak:26
     command: start-dev
     environment:
       KC_DB: postgres
