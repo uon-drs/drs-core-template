@@ -9,7 +9,7 @@ A monorepo template for the standard application stack:
 
 ```
 /
-├── frontend/          Next.js 15 App Router (TypeScript, NextAuth + Keycloak)
+├── frontend/          Next.js 16 App Router (TypeScript, NextAuth + Keycloak)
 ├── backend/           ASP.NET Core 10 Web API (EF Core + Npgsql, JWT Bearer)
 ├── infra/             Bicep modules for Azure provisioning
 └── pipelines/         Azure DevOps YAML pipelines

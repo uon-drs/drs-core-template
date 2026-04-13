@@ -7,7 +7,7 @@ This document is for teams adopting this template. Work through the checklist be
 ## Architecture Overview
 
 ```
-frontend/          Next.js 15 App Router
+frontend/          Next.js 16 App Router
                    ├── NextAuth.js → Keycloak (Authorization Code + PKCE)
                    ├── Session stores Keycloak access token
                    └── Passes Bearer JWT to backend
