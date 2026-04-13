@@ -12,9 +12,9 @@ frontend/          Next.js 16 App Router
                    ├── Session stores Keycloak access token
                    └── Passes Bearer JWT to backend
 
-backend/           ASP.NET Core 9 Web API
+backend/           ASP.NET Core 10 Web API
                    ├── JWT Bearer middleware (validates Keycloak token)
-                   ├── EF Core 9 + Npgsql → PostgreSQL
+                   ├── EF Core 10 + Npgsql → PostgreSQL
                    └── Azure Key Vault config provider (Managed Identity)
 
 infra/             Bicep modules
@@ -35,17 +35,17 @@ pipelines/         Azure DevOps YAML
 
 All Azure resource names are derived from two values set in each `.bicepparam` file:
 
-| Resource | Pattern | Example (`appBaseName=myapp`, `environment=dev`) |
-|---------|---------|-------|
-| App Service Plan | `{appBaseName}-{environment}-asp` | `myapp-dev-asp` |
-| Frontend App Service | `{appBaseName}-{environment}-frontend` | `myapp-dev-frontend` |
-| Backend App Service | `{appBaseName}-{environment}-api` | `myapp-dev-api` |
-| Key Vault | `{appBaseName}-{environment}-kv` | `myapp-dev-kv` |
-| Log Analytics Workspace | `{appBaseName}-shared-law` | `myapp-shared-law` |
-| App Insights | `{appBaseName}-{environment}-ai` | `myapp-dev-ai` |
-| PostgreSQL Server | `{appBaseName}-{environment}-postgres` | `myapp-dev-postgres` |
-| Storage Account | `{appBaseName}{environment}storage` | `myappdevstorage` |
-| VNet | `{appBaseName}-{environment}-vnet` | `myapp-dev-vnet` |
+| Resource                | Pattern                                | Example (`appBaseName=myapp`, `environment=dev`) |
+| ----------------------- | -------------------------------------- | ------------------------------------------------ |
+| App Service Plan        | `{appBaseName}-{environment}-asp`      | `myapp-dev-asp`                                  |
+| Frontend App Service    | `{appBaseName}-{environment}-frontend` | `myapp-dev-frontend`                             |
+| Backend App Service     | `{appBaseName}-{environment}-api`      | `myapp-dev-api`                                  |
+| Key Vault               | `{appBaseName}-{environment}-kv`       | `myapp-dev-kv`                                   |
+| Log Analytics Workspace | `{appBaseName}-shared-law`             | `myapp-shared-law`                               |
+| App Insights            | `{appBaseName}-{environment}-ai`       | `myapp-dev-ai`                                   |
+| PostgreSQL Server       | `{appBaseName}-{environment}-postgres` | `myapp-dev-postgres`                             |
+| Storage Account         | `{appBaseName}{environment}storage`    | `myappdevstorage`                                |
+| VNet                    | `{appBaseName}-{environment}-vnet`     | `myapp-dev-vnet`                                 |
 
 ---
 
@@ -143,19 +143,25 @@ All Azure resource names are derived from two values set in each `.bicepparam` f
 ## Key Design Decisions
 
 ### RBAC on Key Vault (not Access Policies)
+
 The Key Vault uses `enableRbacAuthorization: true`. App Service Managed Identities are granted the `Key Vault Secrets User` role via `infra/modules/config/keyvault-access.bicep`. This is the current Microsoft recommendation and is auditable via Azure Policy.
 
 ### Sensitive config via Key Vault references
+
 Connection strings and client secrets are stored as Key Vault secrets and referenced in App Service settings as `@Microsoft.KeyVault(SecretUri=...)`. The plain-text values never appear in app settings or source control.
 
 ### `postgresAdminPassword` never in source
+
 The PostgreSQL admin password is a `@secure()` Bicep parameter supplied only at deployment time via an Azure DevOps secret variable. It does not appear in any `.bicepparam` file.
 
 ### Next.js `output: 'standalone'`
+
 Required for deployment to Azure App Service on Linux. The deployment pipeline copies the `public/` and `.next/static/` directories into the standalone output before packaging, as Next.js does not do this automatically.
 
 ### Progressive deployment (dev → qa → uat → prod)
+
 The CD pipelines use Azure DevOps `deployment` jobs linked to ADO Environments. Approval gates are configured in the ADO UI — not in YAML — keeping pipeline code clean and approval policy in one place.
 
 ### Single `appBaseName` seeds all resource names
+
 Every Azure resource name is derived from `appBaseName` + `environment` variables defined in `main.bicep`. This ensures consistent naming and means renaming the project only requires changing the parameter files.
