@@ -17,21 +17,13 @@ parameters:
   - name: targetEnvironment
     displayName: 'Target Environment'
     type: string
-    default: 'dev'
+    default: 'uat'
     values:
-      - dev
-      - qa
       - uat
       - prod
 
 variables:
   - template: variables/common.yml
-  - ${{ if eq(parameters.targetEnvironment, 'dev') }}:
-      - template: variables/dev.yml
-      - group: templateapp-dev-secrets
-  - ${{ if eq(parameters.targetEnvironment, 'qa') }}:
-      - template: variables/qa.yml
-      - group: templateapp-qa-secrets
   - ${{ if eq(parameters.targetEnvironment, 'uat') }}:
       - template: variables/uat.yml
       - group: templateapp-uat-secrets
