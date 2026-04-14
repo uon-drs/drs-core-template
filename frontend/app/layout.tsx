@@ -1,20 +1,24 @@
 import type { Metadata } from 'next'
-import { SessionProvider } from './providers'
+import { SessionProvider } from 'next-auth/react'
+import { auth } from '@/auth'
 
 export const metadata: Metadata = {
   title: 'TemplateApp',
   description: 'TemplateApp application',
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
+  const session = await auth()
   return (
     <html lang="en">
       <body>
-        <SessionProvider>{children}</SessionProvider>
+        <SessionProvider session={session}>
+          {children}
+        </SessionProvider>
       </body>
     </html>
   )

@@ -1,5 +1,5 @@
-import NextAuth, { NextAuthOptions } from 'next-auth'
-import KeycloakProvider from 'next-auth/providers/keycloak'
+import NextAuth from 'next-auth'
+import Keycloak from 'next-auth/providers/keycloak'
 
 // Extend the built-in session/token types
 declare module 'next-auth' {
@@ -20,14 +20,14 @@ declare module 'next-auth/jwt' {
 
 async function refreshAccessToken(refreshToken: string) {
   try {
-    const url = `${process.env.KEYCLOAK_ISSUER}/protocol/openid-connect/token`
+    const url = `${process.env.AUTH_KEYCLOAK_ISSUER}/protocol/openid-connect/token`
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
         grant_type: 'refresh_token',
-        client_id: process.env.KEYCLOAK_CLIENT_ID!,
-        client_secret: process.env.KEYCLOAK_CLIENT_SECRET ?? '',
+        client_id: process.env.AUTH_KEYCLOAK_ID!,
+        client_secret: process.env.AUTH_KEYCLOAK_SECRET ?? '',
         refresh_token: refreshToken,
       }),
     })
@@ -45,18 +45,14 @@ async function refreshAccessToken(refreshToken: string) {
   }
 }
 
-export const authOptions: NextAuthOptions = {
-  providers: [
-    KeycloakProvider({
-      clientId: process.env.KEYCLOAK_CLIENT_ID!,
-      clientSecret: process.env.KEYCLOAK_CLIENT_SECRET ?? '',
-      issuer: process.env.KEYCLOAK_ISSUER!,
-    }),
-  ],
+// Keycloak reads AUTH_KEYCLOAK_ID, AUTH_KEYCLOAK_SECRET, and AUTH_KEYCLOAK_ISSUER
+// from the environment automatically when called with no arguments.
+export const { auth, handlers, signIn, signOut } = NextAuth({
+  providers: [Keycloak],
 
   callbacks: {
     async jwt({ token, account }) {
-      // Initial sign-in: store tokens from Keycloak
+      // Initial sign-in: persist tokens from Keycloak into the JWT
       if (account) {
         return {
           ...token,
@@ -73,7 +69,7 @@ export const authOptions: NextAuthOptions = {
         return token
       }
 
-      // Token expired — attempt refresh
+      // Token expired — attempt silent refresh
       if (!token.refreshToken) {
         return { ...token, error: 'RefreshAccessTokenError' as const }
       }
@@ -87,12 +83,4 @@ export const authOptions: NextAuthOptions = {
       return session
     },
   },
-
-  // Redirect to Keycloak login page on unauthenticated access
-  pages: {
-    signIn: '/api/auth/signin',
-  },
-}
-
-const handler = NextAuth(authOptions)
-export { handler as GET, handler as POST }
+})

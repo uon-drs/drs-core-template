@@ -1,15 +1,12 @@
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/app/api/auth/[...nextauth]/route'
+import { auth } from '@/auth'
 import type { Session } from 'next-auth'
-
-export { authOptions }
 
 /**
  * Returns the current server-side session, or null if unauthenticated.
  * Use in Server Components and Route Handlers.
  */
 export async function getSession(): Promise<Session | null> {
-  return getServerSession(authOptions)
+  return auth()
 }
 
 /**
@@ -20,7 +17,7 @@ export async function getSession(): Promise<Session | null> {
  *   Authorization: Bearer <token>
  */
 export async function getAccessToken(): Promise<string | null> {
-  const session = await getSession()
+  const session = await auth()
   if (!session || session.error === 'RefreshAccessTokenError') return null
   return session.accessToken ?? null
 }
