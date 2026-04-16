@@ -6,6 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>TemplateApp.Api</RootNamespace>
     <AssemblyName>TemplateApp.Api</AssemblyName>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
 
   <ItemGroup>
@@ -28,8 +29,9 @@
     <!-- DefaultAzureCredential — uses Managed Identity in Azure, developer credentials locally -->
     <PackageReference Include="Azure.Identity" Version="1.13.0" />
 
-    <!-- Swagger/OpenAPI -->
+    <!-- Swagger/OpenAPI + Scalar UI -->
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.9.0" />
+    <PackageReference Include="Scalar.AspNetCore" Version="2.13.22" />
   </ItemGroup>
 
 </Project>

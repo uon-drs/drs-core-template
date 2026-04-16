@@ -1,3 +1,4 @@
+using System.Reflection;
 using Azure.Identity;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
@@ -138,8 +139,19 @@ var app = builder.Build();
 
 if (app.Environment.IsDevelopment())
 {
-    app.UseSwagger();
-    app.UseSwaggerUI();
+  app.UseSwagger();
+  app.MapScalarApiReference("/api-docs", o =>
+  {
+    o.AddDocument("v1", routePattern: "/swagger/{documentName}/swagger.json");
+    o.AddPreferredSecuritySchemes(["oauth2"]);
+    o.AddAuthorizationCodeFlow("oauth2", flow =>
+    {
+      flow
+        .WithClientId(keycloak.PublicClientId)
+        .WithPkce(Pkce.Sha256);
+    });
+  });
+  app.MapSwagger();
 }
 
 if (!app.Environment.IsDevelopment())
