@@ -3,6 +3,8 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using Scalar.AspNetCore;
+using TemplateApp.Api.Config;
 using TemplateApp.Api.Data;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -15,9 +17,9 @@ var builder = WebApplication.CreateBuilder(args);
 var keyVaultName = builder.Configuration["KeyVaultName"];
 if (!string.IsNullOrEmpty(keyVaultName))
 {
-    builder.Configuration.AddAzureKeyVault(
-        new Uri($"https://{keyVaultName}.vault.azure.net/"),
-        new DefaultAzureCredential());
+  builder.Configuration.AddAzureKeyVault(
+    new Uri($"https://{keyVaultName}.vault.azure.net/"),
+    new DefaultAzureCredential());
 }
 
 // ============================================================
@@ -26,7 +28,7 @@ if (!string.IsNullOrEmpty(keyVaultName))
 // in App Service settings as a Key Vault reference.
 // ============================================================
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+  options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 // ============================================================
 // Authentication — Keycloak JWT Bearer
@@ -34,23 +36,26 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 // needing to exchange them. The frontend passes its Keycloak
 // access token directly in the Authorization header.
 // ============================================================
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(options =>
-    {
-        // Keycloak OIDC discovery document is at {Authority}/.well-known/openid-configuration
-        options.Authority = builder.Configuration["Keycloak:Authority"];
-        options.Audience = builder.Configuration["Keycloak:Audience"];
-        options.RequireHttpsMetadata = !builder.Environment.IsDevelopment();
+var keycloak = builder.Configuration.GetSection("Keycloak").Get<KeycloakOptions>()
+               ?? throw new InvalidOperationException("Keycloak configuration is missing.");
 
-        options.TokenValidationParameters = new TokenValidationParameters
-        {
-            ValidateIssuer = true,
-            ValidateAudience = true,
-            ValidateLifetime = true,
-            ValidateIssuerSigningKey = true,
-            ClockSkew = TimeSpan.FromSeconds(30),
-        };
-    });
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+  .AddJwtBearer(options =>
+  {
+    // Keycloak OIDC discovery document is at {Authority}/.well-known/openid-configuration
+    options.Authority = keycloak.Authority;
+    options.Audience = keycloak.Resource;
+    options.RequireHttpsMetadata = !builder.Environment.IsDevelopment();
+
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+      ValidateIssuer = true,
+      ValidateAudience = true,
+      ValidateLifetime = true,
+      ValidateIssuerSigningKey = true,
+      ClockSkew = TimeSpan.FromSeconds(30),
+    };
+  });
 
 builder.Services.AddAuthorization();
 
@@ -61,46 +66,72 @@ builder.Services.AddAuthorization();
 var allowedOrigins = builder.Configuration.GetSection("AllowedOrigins").Get<string[]>() ?? [];
 builder.Services.AddCors(options =>
 {
-    options.AddDefaultPolicy(policy =>
-    {
-        policy.WithOrigins(allowedOrigins)
-              .AllowAnyHeader()
-              .AllowAnyMethod()
-              .AllowCredentials();
-    });
+  options.AddDefaultPolicy(policy =>
+  {
+    policy.WithOrigins(allowedOrigins)
+      .AllowAnyHeader()
+      .AllowAnyMethod()
+      .AllowCredentials();
+  });
 });
 
 builder.Services.AddControllers();
 
 // ============================================================
-// Swagger — only in Development; includes JWT auth scheme
+// OpenAPI — only in Development; Scalar UI with Keycloak PKCE flow
 // ============================================================
 if (builder.Environment.IsDevelopment())
 {
-    builder.Services.AddEndpointsApiExplorer();
-    builder.Services.AddSwaggerGen(options =>
+  builder.Services.AddEndpointsApiExplorer();
+  builder.Services.AddSwaggerGen(o =>
+  {
+    var xmlPath = Path.Combine(AppContext.BaseDirectory, $"{Assembly.GetExecutingAssembly().GetName().Name}.xml");
+    o.IncludeXmlComments(xmlPath);
+
+    o.SwaggerDoc("v1", new OpenApiInfo
     {
-        options.SwaggerDoc("v1", new OpenApiInfo { Title = "TemplateApp API", Version = "v1" });
-        options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
-        {
-            Name = "Authorization",
-            Type = SecuritySchemeType.Http,
-            Scheme = "Bearer",
-            BearerFormat = "JWT",
-            In = ParameterLocation.Header,
-            Description = "Paste a Keycloak access token here.",
-        });
-        options.AddSecurityRequirement(new OpenApiSecurityRequirement
-        {
-            {
-                new OpenApiSecurityScheme
-                {
-                    Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" }
-                },
-                []
-            }
-        });
+      Title = "TemplateApp API", Version = "v1"
     });
+
+    const string oauthSchemeId = "oauth2";
+    o.AddSecurityDefinition(oauthSchemeId, new OpenApiSecurityScheme
+    {
+      Type = SecuritySchemeType.OAuth2,
+      Flows = new OpenApiOAuthFlows
+      {
+        AuthorizationCode = new OpenApiOAuthFlow
+        {
+          AuthorizationUrl = new Uri($"{keycloak.Authority}/protocol/openid-connect/auth"),
+          TokenUrl = new Uri($"{keycloak.Authority}/protocol/openid-connect/token"),
+          Scopes = new Dictionary<string, string>
+          {
+            {
+              "openid", "OpenID Connect"
+            },
+            {
+              "profile", "User profile"
+            },
+            {
+              "email", "User email"
+            },
+          }
+        }
+      }
+    });
+    o.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+      {
+        new OpenApiSecurityScheme
+        {
+          Reference = new OpenApiReference
+          {
+            Type = ReferenceType.SecurityScheme, Id = oauthSchemeId
+          }
+        },
+        ["openid", "profile"]
+      }
+    });
+  });
 }
 
 var app = builder.Build();
@@ -111,7 +142,10 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.UseHttpsRedirection();
+if (!app.Environment.IsDevelopment())
+{
+  app.UseHttpsRedirection();
+}
 app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();
@@ -120,4 +154,6 @@ app.MapControllers();
 app.Run();
 
 // Expose Program for WebApplicationFactory in integration tests
-public partial class Program { }
+public partial class Program
+{
+}
