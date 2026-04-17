@@ -12,8 +12,10 @@ using Microsoft.OpenApi;
 using Scalar.AspNetCore;
 using TemplateApp.Api.Auth;
 using TemplateApp.Api.Config;
+using TemplateApp.Api.Constants;
 using TemplateApp.Api.Data;
 using TemplateApp.Api.Data.Seeder;
+using TemplateApp.Api.Extensions;
 using TemplateApp.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -118,8 +120,14 @@ builder.Services.AddCors(o =>
 // ============================================================
 // App services
 // ============================================================
-builder.Services.AddControllers();
-builder.Services.AddScoped<UserService>();
+builder.Services
+  .AddApplicationInsightsTelemetry()
+  .AddControllersWithViews()
+  .AddJsonOptions(DefaultJsonOptions.Configure);
+
+builder.Services
+  .AddEmailSender(builder.Configuration)
+  .AddScoped<UserService>();
 
 // ============================================================
 // OpenAPI — Development only; Scalar UI with Keycloak PKCE flow
