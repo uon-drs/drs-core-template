@@ -91,6 +91,10 @@ public class KeycloakDataSeeder
       },
       new RoleRepresentation
       {
+        Name = Roles.SendHealthCheckEmails
+      },
+      new RoleRepresentation
+      {
         Name = Roles.ViewContent
       },
     };
@@ -125,7 +129,12 @@ public class KeycloakDataSeeder
 
     var adminRoles = new List<string>
     {
-      Roles.CreateUsers, Roles.UpdateUsers, Roles.DeleteUsers, Roles.ViewUsers,  Roles.ViewContent
+      Roles.CreateUsers,
+      Roles.UpdateUsers,
+      Roles.DeleteUsers,
+      Roles.ViewUsers,
+      Roles.SendHealthCheckEmails,
+      Roles.ViewContent
     };
 
     var guestRoles = new List<string>

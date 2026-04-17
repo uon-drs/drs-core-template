@@ -39,6 +39,7 @@ public static class Roles
   public const string UpdateUsers = "UpdateUsers";
   public const string DeleteUsers = "DeleteUsers";
   public const string ViewUsers = "ViewUsers";
+  public const string SendHealthCheckEmails = "SendHealthCheckEmails";
 
   public const string ViewContent = "ViewContent";
 }

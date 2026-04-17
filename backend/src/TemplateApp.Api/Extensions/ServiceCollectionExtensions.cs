@@ -34,7 +34,8 @@ public static class ServiceCollectionExtensions
     }
 
     s
-      .AddTransient<RazorViewService>();
+      .AddTransient<RazorViewService>()
+      .AddTransient<HealthEmailService>();
 
     return s;
   }

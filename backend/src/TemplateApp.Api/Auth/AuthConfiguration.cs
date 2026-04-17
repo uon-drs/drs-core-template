@@ -14,5 +14,6 @@ public static class AuthConfiguration
       b.AddPolicy(nameof(AuthPolicies.CanCreateUsers), AuthPolicies.CanCreateUsers);
       b.AddPolicy(nameof(AuthPolicies.CanUpdateUsers), AuthPolicies.CanUpdateUsers);
       b.AddPolicy(nameof(AuthPolicies.CanDeleteUsers), AuthPolicies.CanDeleteUsers);
+      b.AddPolicy(nameof(AuthPolicies.CanSendHealthCheckEmail), AuthPolicies.CanSendHealthCheckEmail);
     };
 }

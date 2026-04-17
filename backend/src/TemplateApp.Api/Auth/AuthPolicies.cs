@@ -32,4 +32,12 @@ public static class AuthPolicies
       .Combine(IsAuthenticatedUser)
       .RequireClaim(ClaimTypes.Role, Roles.ViewUsers)
       .Build();
+
+  public static AuthorizationPolicy CanSendHealthCheckEmail
+    => new AuthorizationPolicyBuilder()
+      .Combine(IsAuthenticatedUser)
+      .RequireClaim(ClaimTypes.Role, Roles.ViewUsers)
+      .Build();
+
+
 }
