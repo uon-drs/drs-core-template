@@ -1,12 +1,20 @@
-using System.Reflection;
 using Azure.Identity;
+using Duende.AccessTokenManagement;
+using Keycloak.AuthServices.Common;
+using Keycloak.AuthServices.Sdk.Kiota;
+using Keycloak.AuthServices.Sdk.Kiota.Admin;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
-using Microsoft.OpenApi.Models;
+using Microsoft.OpenApi;
 using Scalar.AspNetCore;
+using TemplateApp.Api.Auth;
 using TemplateApp.Api.Config;
 using TemplateApp.Api.Data;
+using TemplateApp.Api.Data.Seeder;
+using TemplateApp.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -37,6 +45,8 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 // needing to exchange them. The frontend passes its Keycloak
 // access token directly in the Authorization header.
 // ============================================================
+builder.Services.Configure<KeycloakOptions>(builder.Configuration.GetSection("Keycloak"));
+
 var keycloak = builder.Configuration.GetSection("Keycloak").Get<KeycloakOptions>()
                ?? throw new InvalidOperationException("Keycloak configuration is missing.");
 
@@ -58,100 +68,147 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     };
   });
 
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(AuthConfiguration.AuthOptions);
+builder.Services.AddTransient<IClaimsTransformation, KeycloakClaimsTransformer>();
+
+// ============================================================
+// Keycloak admin client — machine-to-machine realm management
+// Uses client credentials flow; token lifecycle managed by Duende.
+// ============================================================
+var keycloakAdminClientOptions = new KeycloakAdminClientOptions
+{
+  AuthServerUrl = keycloak.AuthServerUrl,
+  Realm = keycloak.Realm,
+  Resource = keycloak.Resource,
+  Credentials = new KeycloakClientInstallationCredentials
+  {
+    Secret = keycloak.Secret
+  }
+};
+
+builder.Services
+  .AddKeycloakAdminHttpClient(keycloakAdminClientOptions)
+  .AddClientCredentialsTokenHandler(ClientCredentialsClientName.Parse(keycloakAdminClientOptions.Resource));
+
+builder.Services.AddDistributedMemoryCache();
+builder.Services
+  .AddClientCredentialsTokenManagement()
+  .AddClient(
+    ClientCredentialsClientName.Parse(keycloakAdminClientOptions.Resource),
+    o =>
+    {
+      o.ClientId = ClientId.Parse(keycloakAdminClientOptions.Resource);
+      o.ClientSecret = ClientSecret.Parse(keycloakAdminClientOptions.Credentials.Secret);
+      o.TokenEndpoint = new Uri(keycloakAdminClientOptions.KeycloakTokenEndpoint);
+    }
+  );
 
 // ============================================================
 // CORS — allow the frontend origin
 // Origins are configured per-environment via app settings.
 // ============================================================
 var allowedOrigins = builder.Configuration.GetSection("AllowedOrigins").Get<string[]>() ?? [];
-builder.Services.AddCors(options =>
-{
-  options.AddDefaultPolicy(policy =>
-  {
-    policy.WithOrigins(allowedOrigins)
+builder.Services.AddCors(o =>
+  o.AddDefaultPolicy(p =>
+    p.WithOrigins(allowedOrigins)
       .AllowAnyHeader()
       .AllowAnyMethod()
-      .AllowCredentials();
-  });
-});
-
-builder.Services.AddControllers();
+      .AllowCredentials()));
 
 // ============================================================
-// OpenAPI — only in Development; Scalar UI with Keycloak PKCE flow
+// App services
+// ============================================================
+builder.Services.AddControllers();
+builder.Services.AddScoped<UserService>();
+
+// ============================================================
+// OpenAPI — Development only; Scalar UI with Keycloak PKCE flow
+// XML doc comments are picked up automatically from the generated XML file.
 // ============================================================
 if (builder.Environment.IsDevelopment())
 {
-  builder.Services.AddEndpointsApiExplorer();
-  builder.Services.AddSwaggerGen(o =>
+  builder.Services.AddOpenApi("v1", o =>
   {
-    var xmlPath = Path.Combine(AppContext.BaseDirectory, $"{Assembly.GetExecutingAssembly().GetName().Name}.xml");
-    o.IncludeXmlComments(xmlPath);
-
-    o.SwaggerDoc("v1", new OpenApiInfo
+    o.AddDocumentTransformer((document, _, _) =>
     {
-      Title = "TemplateApp API", Version = "v1"
-    });
-
-    const string oauthSchemeId = "oauth2";
-    o.AddSecurityDefinition(oauthSchemeId, new OpenApiSecurityScheme
-    {
-      Type = SecuritySchemeType.OAuth2,
-      Flows = new OpenApiOAuthFlows
+      document.Info = new OpenApiInfo
       {
-        AuthorizationCode = new OpenApiOAuthFlow
+        Title = "TemplateApp API", Version = "v1"
+      };
+
+      var oauthScheme = new OpenApiSecurityScheme
+      {
+        Type = SecuritySchemeType.OAuth2,
+        Flows = new OpenApiOAuthFlows
         {
-          AuthorizationUrl = new Uri($"{keycloak.Authority}/protocol/openid-connect/auth"),
-          TokenUrl = new Uri($"{keycloak.Authority}/protocol/openid-connect/token"),
-          Scopes = new Dictionary<string, string>
+          AuthorizationCode = new OpenApiOAuthFlow
           {
+            AuthorizationUrl = new Uri($"{keycloak.Authority}/protocol/openid-connect/auth"),
+            TokenUrl = new Uri($"{keycloak.Authority}/protocol/openid-connect/token"),
+            Scopes = new Dictionary<string, string>
             {
-              "openid", "OpenID Connect"
-            },
-            {
-              "profile", "User profile"
-            },
-            {
-              "email", "User email"
-            },
+              {
+                "openid", "OpenID Connect"
+              },
+              {
+                "profile", "User profile"
+              },
+              {
+                "email", "User email"
+              }
+            }
           }
         }
-      }
+      };
+      document.Components ??= new OpenApiComponents();
+      document.Components.SecuritySchemes ??= new Dictionary<string, IOpenApiSecurityScheme>();
+      document.Components.SecuritySchemes.Add("oauth2", oauthScheme);
+      return Task.CompletedTask;
     });
-    o.AddSecurityRequirement(new OpenApiSecurityRequirement
+
+    o.AddOperationTransformer((operation, _, _) =>
     {
-      {
-        new OpenApiSecurityScheme
+      operation.Security =
+      [
+        new OpenApiSecurityRequirement
         {
-          Reference = new OpenApiReference
           {
-            Type = ReferenceType.SecurityScheme, Id = oauthSchemeId
+            new OpenApiSecuritySchemeReference("oauth2"), ["openid", "profile"]
           }
-        },
-        ["openid", "profile"]
-      }
+        }
+      ];
+      return Task.CompletedTask;
     });
   });
 }
 
 var app = builder.Build();
 
+// ============================================================
+// Data seeding, runs at the startup
+// ============================================================
+using var scope = app.Services.CreateScope();
+var keycloakClient = scope.ServiceProvider.GetRequiredService<KeycloakAdminApiClient>();
+var keycloakOptions = scope.ServiceProvider.GetRequiredService<IOptions<KeycloakOptions>>();
+var keycloakDataSeeder = new KeycloakDataSeeder(keycloakClient, keycloakOptions);
+await keycloakDataSeeder.SeedKeycloakData();
+
+// ============================================================
+// Middleware pipeline
+// ============================================================
 if (app.Environment.IsDevelopment())
 {
-  app.UseSwagger();
+  app.MapOpenApi();
   app.MapScalarApiReference("/api-docs", o =>
   {
-    o.AddDocument("v1", routePattern: "/swagger/{documentName}/swagger.json");
+    o.AddDocument("v1", "/openapi/v1.json");
     o.AddPreferredSecuritySchemes(["oauth2"]);
     o.AddAuthorizationCodeFlow("oauth2", flow =>
-    {
       flow
         .WithClientId(keycloak.PublicClientId)
-        .WithPkce(Pkce.Sha256);
-    });
+        .WithPkce(Pkce.Sha256)
+    );
   });
-  app.MapSwagger();
 }
 
 if (!app.Environment.IsDevelopment())

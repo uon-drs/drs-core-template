@@ -18,6 +18,11 @@ public class KeycloakOptions
   public string Resource { get; init; } = "";
 
   /// <summary>
+  /// Client secret.
+  /// </summary>
+  public string Secret { get; init; } = "";
+
+  /// <summary>
   /// Client ID of the public client used for API docs and development testing.
   /// </summary>
   public string PublicClientId { get; init; } = "";
