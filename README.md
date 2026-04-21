@@ -140,23 +140,73 @@ Then:
 - [ ] Rename solution and project files from `TemplateApp.*` to `<YourName>.*`
 - [ ] Update `backend/TemplateApp.sln` project references after renaming
 
-### 2 — Configure Keycloak
+### 2 — Clean up git history and update remote
+
+Squash the template's commit history so your project starts with a clean slate:
+
+```bash
+git checkout --orphan fresh-start
+git add -A
+git commit -m "Initial commit"
+git branch -D main
+git branch -m main
+```
+
+Point the repo at your new project remote and push:
+
+```bash
+git remote set-url origin <your-new-repo-url>
+git push -u origin main
+```
+
+### 3 — Configure Keycloak
 
 Create two clients in your Keycloak realm:
 
-**`templateapp-frontend`** (public client, Authorization Code + PKCE)
+**`templateapp-frontend`** — confidential client used by the Next.js backend (NextAuth)
 
-- [ ] Valid redirect URIs: `http://localhost:3000/api/auth/callback/keycloak`, `https://<frontend-app-service-url>/api/auth/callback/keycloak`
-- [ ] Web origins: `http://localhost:3000`, `https://<frontend-app-service-url>`
-- [ ] Note the client secret (if confidential) for the pipeline variable group
+| Setting | Value |
+| --- | --- |
+| Client authentication | **On** |
+| Authentication flow | Standard flow only |
+| Valid redirect URIs | `<frontend-url>` e.g., `http://localhost:3000/*` |
+| Web origins | `<frontend-url>` e.g., `http://localhost:3000` |
 
-**`templateapp-api`** (confidential client, Bearer-only or standard)
+Add an **Audience** mapper to the frontend client so that the access tokens it receives include `templateapp-api` in the `aud` claim. The backend validates this claim on every request — without it you will get an audience validation error.
+  - Clients → `templateapp-frontend` → Client scopes → `templateapp-frontend-dedicated` → Add mapper → **Audience**
+  - Included client audience: `templateapp-api` — Add to access token: **On**
 
-- [ ] Used as the JWT audience for backend API validation
-- [ ] Update Keycloak URLs in `infra/main.*.bicepparam` files
-- [ ] Update `KEYCLOAK_ISSUER` in frontend `.env.example` and App Service config
+Copy the client secret from the **Credentials** tab into `AUTH_KEYCLOAK_SECRET` (`.env` locally, Key Vault in Azure).
 
-### 3 — Provision Azure Infrastructure
+---
+
+**`templateapp-api`** — confidential client representing the backend API (used as the JWT audience)
+
+| Setting | Value |
+| --- | --- |
+| Client authentication | **On** |
+| Authentication flow | Standard flow only |
+
+Copy the client secret into `Keycloak__Secret` in App Service config (or Key Vault reference).
+
+---
+
+**`templateapp-public`** — public client for developer API docs via Scalar — **local development only**
+
+| Setting | Value |
+| --- | --- |
+| Client authentication | **Off** (public client) |
+| Authentication flow | Standard flow only |
+| Valid redirect URIs | `http://localhost:5000/*` |
+| Web origins | `http://localhost:5000` |
+
+No secret is required. PKCE (SHA-256) is enforced by the Scalar configuration.
+
+---
+
+Update Keycloak URLs in `infra/main.*.bicepparam` files and `AUTH_KEYCLOAK_ISSUER` in frontend `.env.example` and App Service config.
+
+### 4 — Provision Azure Infrastructure
 
 Resource groups are provisioned by IT. Update the names in `pipelines/variables/*.yml`.
 
@@ -181,7 +231,7 @@ az deployment group create \
 - [ ] Store secrets in Key Vault: `nextauth-secret`, `keycloak-frontend-client-secret`, `postgres-connection-string`
 - [ ] Verify App Service Managed Identities have the `Key Vault Secrets User` role on the vault
 
-### 4 — Set up Azure DevOps
+### 5 — Set up Azure DevOps
 
 - [ ] Create service connection `templateapp-azure-sc` (Azure Resource Manager, scoped to subscription)
 - [ ] Create two ADO Environments:
@@ -201,7 +251,7 @@ az deployment group create \
 - [ ] Link `templateapp-common` variable group to each pipeline
 - [ ] Link `templateapp-uat-secrets` and `templateapp-prod-secrets` to `cd-infrastructure`, `cd-backend`, `cd-frontend`
 
-### 5 — First Deployment
+### 6 — First Deployment
 
 - [ ] Trigger `CI - Backend` on a feature branch to verify build and tests pass
 - [ ] Trigger `CI - Frontend` on a feature branch to verify Next.js build passes
@@ -213,7 +263,7 @@ az deployment group create \
 - [ ] Merge to `main` to trigger `CD - Backend` and `CD - Frontend` for uat deployment
 - [ ] Verify end-to-end: frontend → Keycloak login → JWT forwarded to backend → 200 OK
 
-### 6 — Smoke Testing
+### 7 — Smoke Testing
 
 - [ ] `GET https://{backend-uat-url}/api/health` → 200 (unauthenticated)
 - [ ] `GET https://{backend-uat-url}/api/health/auth` with valid JWT → 200

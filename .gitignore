@@ -40,3 +40,7 @@ coverage/
 Thumbs.db
 *.log
 *.tmp
+
+# JetBrains Rider
+*.sln.iml
+.idea

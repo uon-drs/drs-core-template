@@ -31,6 +31,10 @@ indent_size = 2
 [*.{json,json5,webmanifest}]
 indent_size = 2
 
+# JavaScript/TypeScript Files
+[*.{js,jsx,ts,tsx,mjs,mts}]
+indent_size = 2
+
 # YAML Files
 [*.{yml,yaml}]
 indent_size = 2

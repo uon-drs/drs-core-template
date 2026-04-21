@@ -6,11 +6,15 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>TemplateApp.Api</RootNamespace>
     <AssemblyName>TemplateApp.Api</AssemblyName>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
 
   <ItemGroup>
     <!-- JWT Bearer authentication — validates Keycloak-issued tokens -->
+    <PackageReference Include="Microsoft.ApplicationInsights.AspNetCore" Version="2.23.0" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.0" />
+    <PackageReference Include="Duende.AccessTokenManagement" Version="4.2.0" />
+    <PackageReference Include="Keycloak.AuthServices.Sdk.Kiota" Version="26.5.6" />
 
     <!-- EF Core ORM -->
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.0" />
@@ -28,8 +32,18 @@
     <!-- DefaultAzureCredential — uses Managed Identity in Azure, developer credentials locally -->
     <PackageReference Include="Azure.Identity" Version="1.13.0" />
 
-    <!-- Swagger/OpenAPI -->
-    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.9.0" />
+    <!-- OpenAPI + Scalar UI -->
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.6" />
+    <PackageReference Include="Scalar.AspNetCore" Version="2.13.22" />
+
+    <!-- Fluent HTTP client -->
+    <PackageReference Include="Flurl" Version="4.0.0" />
+    <PackageReference Include="Flurl.Http" Version="4.0.2" />
+
+    <!-- Email -->
+    <PackageReference Include="MailKit" Version="4.16.0" />
+    <PackageReference Include="MimeKit" Version="4.16.0" />
+    <PackageReference Include="SendGrid" Version="9.29.3" />
   </ItemGroup>
 
 </Project>

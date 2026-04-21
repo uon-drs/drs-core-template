@@ -1,0 +1,23 @@
+@model HealthCheckEmailModel
+
+@{
+	ViewBag.Heading = "Email Health Check";
+}
+
+<p>
+	Hello,
+</p>
+
+<p>
+	This is a health-check message from the application email service.
+	If you received this email, outbound email configuration is working correctly.
+</p>
+
+<p>
+	Generated at (UTC): <strong>@Model.CheckedAtUtc.ToString("yyyy-MM-dd HH:mm:ss")</strong>
+</p>
+
+<p>
+	You can safely ignore this email.
+</p>
+
