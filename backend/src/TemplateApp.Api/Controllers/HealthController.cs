@@ -31,8 +31,10 @@ public class HealthController : ControllerBase
 
   /// <summary>
   /// Authenticated health check — verifies JWT Bearer auth is configured correctly.
-  /// Returns the claims from the validated token.
   /// </summary>
+  /// <returns>
+  /// Returns the claims from the validated token.
+  /// </returns>
   [HttpGet("auth")]
   [Authorize]
   public IActionResult GetAuth()
@@ -47,8 +49,14 @@ public class HealthController : ControllerBase
     });
   }
 
+  /// <summary>
+  /// Sends a test health check email to the authenticated user's email address. User must have valid permission.
+  /// </summary>
   [HttpPost("send-email")]
   [Authorize(nameof(AuthPolicies.CanSendHealthCheckEmail))]
+  [ProducesResponseType(StatusCodes.Status204NoContent)]
+  [ProducesResponseType(StatusCodes.Status400BadRequest)]
+  [ProducesResponseType(StatusCodes.Status500InternalServerError)]
   public async Task<ActionResult> SendEmail()
   {
     var email = User.FindFirst(ClaimTypes.Email)?.Value;

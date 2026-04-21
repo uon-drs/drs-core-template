@@ -133,6 +133,8 @@ builder.Services
 // OpenAPI — Development only; Scalar UI with Keycloak PKCE flow
 // XML doc comments are picked up automatically from the generated XML file.
 // ============================================================
+const string oAuth2SchemeIdentifier = "oAuth2";
+
 if (builder.Environment.IsDevelopment())
 {
   builder.Services.AddOpenApi("v1", o =>
@@ -144,7 +146,7 @@ if (builder.Environment.IsDevelopment())
         Title = "TemplateApp API", Version = "v1"
       };
 
-      var oauthScheme = new OpenApiSecurityScheme
+      var oAuth2Scheme = new OpenApiSecurityScheme
       {
         Type = SecuritySchemeType.OAuth2,
         Flows = new OpenApiOAuthFlows
@@ -153,24 +155,12 @@ if (builder.Environment.IsDevelopment())
           {
             AuthorizationUrl = new Uri($"{keycloak.Authority}/protocol/openid-connect/auth"),
             TokenUrl = new Uri($"{keycloak.Authority}/protocol/openid-connect/token"),
-            Scopes = new Dictionary<string, string>
-            {
-              {
-                "openid", "OpenID Connect"
-              },
-              {
-                "profile", "User profile"
-              },
-              {
-                "email", "User email"
-              }
-            }
           }
         }
       };
       document.Components ??= new OpenApiComponents();
       document.Components.SecuritySchemes ??= new Dictionary<string, IOpenApiSecurityScheme>();
-      document.Components.SecuritySchemes.Add("oauth2", oauthScheme);
+      document.Components.SecuritySchemes.Add(oAuth2SchemeIdentifier, oAuth2Scheme);
       return Task.CompletedTask;
     });
 
@@ -181,7 +171,7 @@ if (builder.Environment.IsDevelopment())
         new OpenApiSecurityRequirement
         {
           {
-            new OpenApiSecuritySchemeReference("oauth2"), ["openid", "profile"]
+            new OpenApiSecuritySchemeReference(oAuth2SchemeIdentifier), []
           }
         }
       ];
@@ -210,8 +200,8 @@ if (app.Environment.IsDevelopment())
   app.MapScalarApiReference("/api-docs", o =>
   {
     o.AddDocument("v1", "/openapi/v1.json");
-    o.AddPreferredSecuritySchemes(["oauth2"]);
-    o.AddAuthorizationCodeFlow("oauth2", flow =>
+    o.AddPreferredSecuritySchemes([oAuth2SchemeIdentifier]);
+    o.AddAuthorizationCodeFlow(oAuth2SchemeIdentifier, flow =>
       flow
         .WithClientId(keycloak.PublicClientId)
         .WithPkce(Pkce.Sha256)
