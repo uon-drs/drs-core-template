@@ -20,11 +20,14 @@ param keyVaultName string
 @description('Name of the Key Vault (used for the KeyVaultName app setting so Program.cs can locate it).')
 param keyVaultNameSetting string
 
-@description('Keycloak OIDC authority URL (e.g. https://keycloak.example.com/realms/myrealm).')
-param keycloakAuthority string
+@description('Keycloak auth server URL (e.g. https://keycloak.example.com)')
+param keycloakAuthServerUrl string
 
-@description('Keycloak audience (client ID of the API client in Keycloak).')
-param keycloakAudience string
+@description('Keycloak realm name (e.g. myrealm)')
+param keycloakRealm string
+
+@description('Keycloak client ID for the backend API (used in API app settings and as JWT audience).')
+param keycloakApiClientId string
 
 @description('Comma-separated list of allowed CORS origins (frontend URL).')
 param allowedOrigins array = []
@@ -46,9 +49,11 @@ module settings 'base/app-service.bicep' = {
         // Key Vault name — used by Program.cs to initialise the Key Vault config provider
         KeyVaultName: keyVaultNameSetting
 
-        // Keycloak JWT Bearer configuration (maps to Keycloak:Authority and Keycloak:Audience in appsettings.json)
-        Keycloak__Authority: keycloakAuthority
-        Keycloak__Audience: keycloakAudience
+        // Keycloak configuration
+        Keycloak__AuthServerUrl: keycloakAuthServerUrl
+        Keycloak__Realm: keycloakRealm
+        Keycloak__Resource: keycloakApiClientId
+        Keycloak__Secret: referenceSecret(keyVaultName, 'keycloak-api-client-secret')
 
         // CORS — frontend origin(s)
         AllowedOrigins__0: length(allowedOrigins) > 0 ? allowedOrigins[0] : ''

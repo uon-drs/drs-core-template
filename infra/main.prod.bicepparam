@@ -12,10 +12,10 @@ param postgresSkuTier = 'GeneralPurpose'
 param postgresStorageSizeGB = 128
 param postgresAdminLogin = 'templateappadmin'
 
-param keycloakAuthority = 'https://keycloak.example.com/realms/templateapp'
-param keycloakApiAudience = 'templateapp-api'
-param keycloakFrontendClientId = 'templateapp-frontend'
-param keycloakIssuerUrl = 'https://keycloak.example.com/realms/templateapp'
+param keycloakAuthServerUrl = 'https://keycloak.example.com'
+param keycloakRealm = 'templateapp-realm'
+param keycloakApiClientId = 'templateapp-realm-api'
+param keycloakFrontendClientId = 'templateapp-realm-frontend'
 
 param logRetentionDays = 90
 

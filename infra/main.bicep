@@ -26,17 +26,17 @@ param environment string
 @description('Azure region for all resources. Defaults to the resource group location.')
 param location string = resourceGroup().location
 
-@description('Keycloak OIDC authority URL used by the backend API for JWT validation (e.g. https://keycloak.example.com/realms/myrealm).')
-param keycloakAuthority string
+@description('Keycloak auth server URL (e.g. https://keycloak.example.com)')
+param keycloakAuthServerUrl string
 
-@description('Keycloak client ID used as the JWT audience for the backend API.')
-param keycloakApiAudience string
+@description('Keycloak realm name (e.g. myrealm)')
+param keycloakRealm string
+
+@description('Keycloak client ID for the backend API (used in API app settings and as JWT audience).')
+param keycloakApiClientId string
 
 @description('Keycloak client ID for the frontend application (used in KEYCLOAK_CLIENT_ID app setting).')
 param keycloakFrontendClientId string
-
-@description('Full Keycloak issuer URL for NextAuth.js (e.g. https://keycloak.example.com/realms/myrealm).')
-param keycloakIssuerUrl string
 
 @description('Administrator login username for PostgreSQL Flexible Server.')
 param postgresAdminLogin string
@@ -246,7 +246,7 @@ module frontendConfig 'modules/config/webapp.bicep' = {
     appName: frontendAppName
     appInsightsConnectionString: frontendApp.outputs.appInsights.connectionString
     frontendUrl: frontendApp.outputs.defaultUrl
-    keycloakIssuerUrl: keycloakIssuerUrl
+    keycloakIssuerUrl: '${keycloakAuthServerUrl}/realms/${keycloakRealm}'
     keycloakClientId: keycloakFrontendClientId
     apiBaseUrl: backendApp.outputs.defaultUrl
     keyVaultName: keyVaultName
@@ -261,8 +261,9 @@ module backendConfig 'modules/config/api.bicep' = {
     appInsightsConnectionString: backendApp.outputs.appInsights.connectionString
     keyVaultName: keyVaultName
     keyVaultNameSetting: keyVaultName
-    keycloakAuthority: keycloakAuthority
-    keycloakAudience: keycloakApiAudience
+    keycloakAuthServerUrl: keycloakAuthServerUrl
+    keycloakRealm: keycloakRealm
+    keycloakApiClientId: keycloakApiClientId
     allowedOrigins: [frontendApp.outputs.defaultUrl]
   }
   dependsOn: [backendKvAccess]
