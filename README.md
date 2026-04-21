@@ -140,7 +140,26 @@ Then:
 - [ ] Rename solution and project files from `TemplateApp.*` to `<YourName>.*`
 - [ ] Update `backend/TemplateApp.sln` project references after renaming
 
-### 2 — Configure Keycloak
+### 2 — Clean up git history and update remote
+
+Squash the template's commit history so your project starts with a clean slate:
+
+```bash
+git checkout --orphan fresh-start
+git add -A
+git commit -m "Initial commit"
+git branch -D main
+git branch -m main
+```
+
+Point the repo at your new project remote and push:
+
+```bash
+git remote set-url origin <your-new-repo-url>
+git push -u origin main
+```
+
+### 3 — Configure Keycloak
 
 Create two clients in your Keycloak realm:
 
@@ -187,7 +206,7 @@ No secret is required. PKCE (SHA-256) is enforced by the Scalar configuration.
 
 Update Keycloak URLs in `infra/main.*.bicepparam` files and `AUTH_KEYCLOAK_ISSUER` in frontend `.env.example` and App Service config.
 
-### 3 — Provision Azure Infrastructure
+### 4 — Provision Azure Infrastructure
 
 Resource groups are provisioned by IT. Update the names in `pipelines/variables/*.yml`.
 
@@ -212,7 +231,7 @@ az deployment group create \
 - [ ] Store secrets in Key Vault: `nextauth-secret`, `keycloak-frontend-client-secret`, `postgres-connection-string`
 - [ ] Verify App Service Managed Identities have the `Key Vault Secrets User` role on the vault
 
-### 4 — Set up Azure DevOps
+### 5 — Set up Azure DevOps
 
 - [ ] Create service connection `templateapp-azure-sc` (Azure Resource Manager, scoped to subscription)
 - [ ] Create two ADO Environments:
@@ -232,7 +251,7 @@ az deployment group create \
 - [ ] Link `templateapp-common` variable group to each pipeline
 - [ ] Link `templateapp-uat-secrets` and `templateapp-prod-secrets` to `cd-infrastructure`, `cd-backend`, `cd-frontend`
 
-### 5 — First Deployment
+### 6 — First Deployment
 
 - [ ] Trigger `CI - Backend` on a feature branch to verify build and tests pass
 - [ ] Trigger `CI - Frontend` on a feature branch to verify Next.js build passes
@@ -244,7 +263,7 @@ az deployment group create \
 - [ ] Merge to `main` to trigger `CD - Backend` and `CD - Frontend` for uat deployment
 - [ ] Verify end-to-end: frontend → Keycloak login → JWT forwarded to backend → 200 OK
 
-### 6 — Smoke Testing
+### 7 — Smoke Testing
 
 - [ ] `GET https://{backend-uat-url}/api/health` → 200 (unauthenticated)
 - [ ] `GET https://{backend-uat-url}/api/health/auth` with valid JWT → 200
