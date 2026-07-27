@@ -4,6 +4,11 @@
 # Builds, tests (with coverage), and publishes a deployment artifact.
 #
 # Artifact produced: 'api-drop' — used by cd-backend.yml
+#
+# Starts an Azurite container so integration tests can exercise the Azure Storage
+# account (see infra/modules/components/storage-account.bicep) the same way local
+# dev does via docker-compose.yml. Remove this step if the backend has no tests
+# that touch Blob/Queue/Table storage.
 
 trigger:
   branches:
@@ -36,6 +41,18 @@ stages:
       - job: BuildAndTest
         displayName: 'Build, Test, Publish'
         steps:
+          - script: |
+              docker run --detach \
+                --publish 10000:10000 \
+                --publish 10001:10001 \
+                --publish 10002:10002 \
+                mcr.microsoft.com/azure-storage/azurite \
+                azurite --skipApiVersionCheck \
+                        --blobHost 0.0.0.0 \
+                        --queueHost 0.0.0.0 \
+                        --tableHost 0.0.0.0
+            displayName: 'Start Azurite'
+
           - task: UseDotNet@2
             displayName: 'Install .NET $(dotnetVersion)'
             inputs:
