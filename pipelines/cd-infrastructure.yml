@@ -10,6 +10,15 @@
 #
 # Secret variables required (from ADO Variable Group 'templateapp-{env}-secrets'):
 #   postgresAdminPassword
+#
+# The real secret is only loaded into the Deploy stage, which is gated by the ADO
+# Environment's approval check. Validate and WhatIf run as plain jobs (no approval gate)
+# so they use a placeholder password instead — never expose the real secret to a stage
+# that isn't approval-gated.
+#
+# Approval gates (configure in ADO Project Settings > Environments):
+#   templateapp-uat  — 1 required approver
+#   templateapp-prod — 2 required approvers
 
 trigger: none
 
@@ -26,10 +35,8 @@ variables:
   - template: variables/common.yml
   - ${{ if eq(parameters.targetEnvironment, 'uat') }}:
       - template: variables/uat.yml
-      - group: templateapp-uat-secrets
   - ${{ if eq(parameters.targetEnvironment, 'prod') }}:
       - template: variables/prod.yml
-      - group: templateapp-prod-secrets
 
 pool:
   vmImage: 'ubuntu-latest'
@@ -58,7 +65,7 @@ stages:
                   --resource-group $(resourceGroupName) \
                   --template-file $(infraPath)/main.bicep \
                   --parameters $(infraPath)/main.$(environment).bicepparam \
-                  --parameters postgresAdminPassword='$(postgresAdminPassword)'
+                  --parameters postgresAdminPassword='placeholder-for-validation'
 
   # ============================================================
   - stage: WhatIf
@@ -79,18 +86,24 @@ stages:
                   --resource-group $(resourceGroupName) \
                   --template-file $(infraPath)/main.bicep \
                   --parameters $(infraPath)/main.$(environment).bicepparam \
-                  --parameters postgresAdminPassword='$(postgresAdminPassword)'
+                  --parameters postgresAdminPassword='placeholder-for-what-if'
 
   # ============================================================
   - stage: Deploy
     displayName: 'Deploy Infrastructure (${{ parameters.targetEnvironment }})'
     dependsOn: WhatIf
     jobs:
-      # Using 'deployment' job type to integrate with ADO Environments.
+      # Using 'deployment' job type to integrate with ADO Environments — this is what
+      # gates the stage on approval, and the only stage where the real secret is loaded.
       # Configure approval gates on 'templateapp-uat' and 'templateapp-prod' in the ADO UI.
       - deployment: DeployBicep
         displayName: 'Deploy Bicep to $(environment)'
         environment: '$(appBaseName)-$(environment)'
+        variables:
+          - ${{ if eq(parameters.targetEnvironment, 'uat') }}:
+              - group: templateapp-uat-secrets
+          - ${{ if eq(parameters.targetEnvironment, 'prod') }}:
+              - group: templateapp-prod-secrets
         strategy:
           runOnce:
             deploy:
