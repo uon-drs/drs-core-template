@@ -8,7 +8,9 @@
 #   cd-backend.yml        — API deployments
 #   cd-frontend.yml       — frontend deployments
 #
-# Approval gates are honoured per-environment via ADO Environments (configured in the ADO UI).
+# Approval gates are honoured per-environment via ADO Environments (configured in the ADO UI):
+#   templateapp-uat  — 1 required approver
+#   templateapp-prod — 2 required approvers
 
 trigger: none
 
