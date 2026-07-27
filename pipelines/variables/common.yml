@@ -6,7 +6,9 @@ variables:
 
   # ============================================================
   # Azure DevOps service connection
-  # Create this in ADO Project Settings > Service Connections
+  # Create this in ADO Project Settings > Service Connections.
+  # Use a Workload Identity Federation service connection (secretless, OIDC-based) rather
+  # than a Service Principal with a stored client secret — avoids a long-lived credential.
   # ============================================================
   azureServiceConnection: 'templateapp-azure-sc'
 
